@@ -43,26 +43,70 @@ def convergence_study():
         )
 
     # --- Plot ---
-    plt.figure(figsize=(8, 6))
-
+    plt.figure()
     plt.loglog(M_values, errors_cn, "o-", label="Crank–Nicolson", linewidth=2)
     plt.loglog(M_values, errors_explicit, "s-", label="Explicit", linewidth=2)
-
     # Reference slope O(M^-2)
     ref = [errors_cn[0] * (M_values[0] / m) ** 2 for m in M_values]
-    plt.loglog(M_values, ref, "--", label="O(M⁻² reference)")
-
+    plt.loglog(M_values, ref, "--", label=r"$O(M^{-2}$)")
     plt.xlabel("Number of spatial points (M)")
     plt.ylabel("Max Error")
-    plt.title("Convergence Study: Explicit vs Crank–Nicolson")
-
+    plt.title("Spatial Convergence")
     plt.legend()
     plt.grid(True, which="both", linestyle="--", alpha=0.6)
-
     plt.tight_layout()
-    plt.savefig("tests/convergence_explicit_CN.png")
+    plt.savefig("tests/spatial_convergence_explicit_CN.png")
+    plt.close()
+
+
+def time_convergence():
+    S_max = 200
+    K = 100
+    T = 1.0
+    r = 0.05
+    sigma = 0.2
+
+    M = 200  # FIXED spatial resolution
+
+    N_values = [50, 100, 200, 400, 800]
+
+    errors_cn = []
+    errors_explicit = []
+
+    for N in N_values:
+        S, price_cn = solve_crank_nicolson(S_max, K, T, r, sigma, M, N)
+        S, price_explicit = solve_explicit(S_max, K, T, r, sigma, M, N)
+
+        price_exact = black_scholes_call(S, K, T, r, sigma)
+
+        error_cn = np.max(np.abs(price_cn - price_exact))
+        error_explicit = np.max(np.abs(price_explicit - price_exact))
+
+        errors_cn.append(error_cn)
+        errors_explicit.append(error_explicit)
+
+    # --- Plot ---
+    plt.figure()
+    plt.loglog(N_values, errors_cn, "o-", label="CN")
+    plt.loglog(N_values, errors_explicit, "s-", label="Explicit")
+
+    # Reference slopes
+    ref1 = [errors_explicit[0] * (N_values[0] / n) for n in N_values]
+    ref2 = [errors_cn[0] * (N_values[0] / n) ** 2 for n in N_values]
+
+    plt.loglog(N_values, ref1, "--", label=r"$O(dt)$")
+    plt.loglog(N_values, ref2, "--", label=r"$O(dt^2)$")
+
+    plt.xlabel("Number of time steps (N)")
+    plt.ylabel("Max Error")
+    plt.title("Time Convergence")
+    plt.legend()
+    plt.grid(True, which="both", linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    plt.savefig("tests/time_convergence_explicit_CN.png")
     plt.close()
 
 
 if __name__ == "__main__":
     convergence_study()
+    time_convergence()
