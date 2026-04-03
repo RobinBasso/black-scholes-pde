@@ -44,7 +44,7 @@ $V(S, T) = \max(S - K, 0)$
 
 ### Boundary conditions
 
-- $V(0, t) = 0 \$
+- $V(0, t) = 0$
 - $V(S_{\max}, t) \approx S_{\max} - K e^{-r(T-t)}$
 
 ---
@@ -155,7 +155,7 @@ $$
 \max(S - K, 0)
 $$
 
-is not smooth at $( S = K \)$. This lack of regularity has important numerical consequences:
+is not smooth at $S = K$. This lack of regularity has important numerical consequences:
 
 - Degradation of theoretical convergence orders
 - Reduced effectiveness of higher-order time schemes
@@ -177,19 +177,19 @@ is not smooth at $( S = K \)$. This lack of regularity has important numerical c
 black-scholes-pde/
 │
 ├── src/
-│ ├── solver.py
-│ ├── utils.py
+│   ├── solver.py
+│   ├── utils.py
 │
 ├── tests/
-│ ├── test_solver.py
-│ ├── convergence.py
-|
-├── Figures
-│ ├── time_convergence_rannacher.png
-│ ├── time_convergence_explicit_CN
-| ├── comparison_explicit_CN_analytical.png
-| ├── spatial_convergence_explicit_CN.png
-│ ├── error_explicit_CN
+│   ├── test_solver.py
+│   ├── convergence.py
+│
+├── Figures/
+│   ├── comparison_explicit_CN_analytical.png
+│   ├── error_explicit_CN.png
+│   ├── spatial_convergence_explicit_CN.png
+│   ├── time_convergence_explicit_CN.png
+│   ├── time_convergence_rannacher.png
 │
 ├── README.md
 ├── requirements.txt
