@@ -23,10 +23,12 @@ The numerical solutions are validated against the analytical Black–Scholes for
 
 ## Key Results
 
-- Second-order spatial convergence confirmed
-- Explicit scheme instability demonstrated
-- Time convergence limited by payoff regularity
-- Rannacher smoothing improves temporal behavior
+## Key Results
+
+- Second-order spatial convergence verified for both schemes
+- Explicit scheme instability clearly demonstrated under CFL violation
+- Time convergence limited by payoff non-smoothness
+- Rannacher smoothing improves temporal convergence but remains first-order in practice
 
 ---
 
@@ -81,6 +83,8 @@ Numerical solutions are compared against the analytical Black–Scholes formula.
 ### Price Comparison
 
 ![Comparison](Figures/comparison_explicit_CN_analytical.png)
+
+Comparison between numerical methods and analytical solution.
 
 ### Error Profile
 
@@ -169,6 +173,8 @@ is not smooth at $S = K$. This lack of regularity has important numerical conseq
 - Explicit scheme is conditionally stable and may diverge for large time steps
 - Crank–Nicolson is unconditionally stable but sensitive to payoff regularity
 - Rannacher smoothing improves convergence behavior but does not fully restore second-order time accuracy in practice
+
+These results highlight the practical gap between theoretical convergence orders and observed numerical behavior when solving PDEs with non-smooth initial conditions.
 
 ---
 
