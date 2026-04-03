@@ -7,4 +7,4 @@ ignore = []
 [format]
 quote-style = "double"
 indent-style = "space"
-format.preview = "true"
+preview = true
