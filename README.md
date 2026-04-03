@@ -35,17 +35,12 @@ The numerical solutions are validated against the analytical Black–Scholes for
 The Black–Scholes PDE is given by:
 
 $$
-\frac{\partial V}{\partial t}
-+ \frac{1}{2} \sigma^2 S^2 \frac{\partial^2 V}{\partial S^2}
-+ r S \frac{\partial V}{\partial S}
-- r V = 0
+\frac{\partial V}{\partial t} + \frac{1}{2} \sigma^2 S^2 \frac{\partial^2 V}{\partial S^2} + r S \frac{\partial V}{\partial S} - r V = 0
 $$
 
 ### Terminal condition
 
-$$
-V(S, T) = \max(S - K, 0)
-$$
+$V(S, T) = \max(S - K, 0)$
 
 ### Boundary conditions
 
@@ -85,11 +80,11 @@ Numerical solutions are compared against the analytical Black–Scholes formula.
 
 ### Price Comparison
 
-![Comparison](comparison.png)
+![Comparison](tests/comparison_explicit_CN_analytical.png)
 
 ### Error Profile
 
-![Error](error.png)
+![Error](tests/error_explicit_CN.png)
 
 ---
 
@@ -97,7 +92,7 @@ Numerical solutions are compared against the analytical Black–Scholes formula.
 
 ### 1. Spatial Convergence
 
-![Spatial Convergence](convergence.png)
+![Spatial Convergence](tests/spatial_convergence_explicit_CN.png)
 
 Both explicit and Crank–Nicolson schemes exhibit second-order convergence with respect to spatial discretization:
 
@@ -122,6 +117,8 @@ This illustrates the conditional stability of the explicit scheme versus the rob
 ---
 
 ### 3. Time Convergence – Practical Regime
+
+![Time Convergence](tests/time_convergence_explicit_CN.png)
 
 When the explicit scheme is stabilized (small time step):
 
@@ -192,11 +189,20 @@ black-scholes-pde/
 ├── convergence.png
 ├── README.md
 ├── requirements.txt
-
+```
 ---
 
 ## Usage
 
 ### Install dependencies
-
+```
 pip install -r requirements.txt
+```
+### Run validation
+```
+python -m tests.test_solver
+```
+### Run convergence study
+```
+python -m tests.convergence
+```

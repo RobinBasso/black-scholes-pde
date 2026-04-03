@@ -163,6 +163,6 @@ def time_convergence_rannacher():
 
 
 if __name__ == "__main__":
-    # convergence_study()
-    # time_convergence()
+    convergence_study()
+    time_convergence()
     time_convergence_rannacher()
