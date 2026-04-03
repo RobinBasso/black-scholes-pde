@@ -44,8 +44,8 @@ $V(S, T) = \max(S - K, 0)$
 
 ### Boundary conditions
 
-- $( V(0, t) = 0 \)$
-- $( V(S_{\max}, t) \approx S_{\max} - K e^{-r(T-t)} \)$
+- $V(0, t) = 0 \$
+- $V(S_{\max}, t) \approx S_{\max} - K e^{-r(T-t)}$
 
 ---
 
@@ -80,11 +80,11 @@ Numerical solutions are compared against the analytical Black–Scholes formula.
 
 ### Price Comparison
 
-![Comparison](tests/comparison_explicit_CN_analytical.png)
+![Comparison](Figures/comparison_explicit_CN_analytical.png)
 
 ### Error Profile
 
-![Error](tests/error_explicit_CN.png)
+![Error](Figures/error_explicit_CN.png)
 
 ---
 
@@ -92,7 +92,7 @@ Numerical solutions are compared against the analytical Black–Scholes formula.
 
 ### 1. Spatial Convergence
 
-![Spatial Convergence](tests/spatial_convergence_explicit_CN.png)
+![Spatial Convergence](Figures/spatial_convergence_explicit_CN.png)
 
 Both explicit and Crank–Nicolson schemes exhibit second-order convergence with respect to spatial discretization:
 
@@ -118,7 +118,7 @@ This illustrates the conditional stability of the explicit scheme versus the rob
 
 ### 3. Time Convergence – Practical Regime
 
-![Time Convergence](tests/time_convergence_explicit_CN.png)
+![Time Convergence](Figures/time_convergence_explicit_CN.png)
 
 When the explicit scheme is stabilized (small time step):
 
@@ -134,7 +134,7 @@ This occurs because:
 
 ### 4. Time Convergence with Rannacher Smoothing
 
-![Rannacher Convergence](tests/time_convergence_rannacher.png)
+![Rannacher Convergence](Figures/time_convergence_rannacher.png)
 
 Rannacher smoothing is applied to mitigate the impact of the non-smooth payoff.
 
@@ -183,10 +183,14 @@ black-scholes-pde/
 ├── tests/
 │ ├── test_solver.py
 │ ├── convergence.py
+|
+├── Figures
 │ ├── time_convergence_rannacher.png
+│ ├── time_convergence_explicit_CN
+| ├── comparison_explicit_CN_analytical.png
+| ├── spatial_convergence_explicit_CN.png
+│ ├── error_explicit_CN
 │
-├── comparison.png
-├── convergence.png
 ├── README.md
 ├── requirements.txt
 ```

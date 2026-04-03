@@ -30,7 +30,7 @@ def run_test():
     plt.title("Method Comparison")
     plt.xlabel("Stock Price")
     plt.ylabel("Option Price")
-    plt.savefig("tests/comparison_explicit_CN_analytical.png")
+    plt.savefig("Figures/comparison_explicit_CN_analytical.png")
     plt.close()
 
     # Error
@@ -45,7 +45,7 @@ def run_test():
     plt.title("Error Comparison")
     plt.xlabel("Stock Price")
     plt.ylabel("Error")
-    plt.savefig("tests/error_explicit_CN.png")
+    plt.savefig("Figures/error_explicit_CN.png")
     plt.close()
 
     print("Max error explicit:", np.max(error_explicit))

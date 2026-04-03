@@ -55,7 +55,7 @@ def convergence_study():
     plt.legend()
     plt.grid(True, which="both", linestyle="--", alpha=0.6)
     plt.tight_layout()
-    plt.savefig("tests/spatial_convergence_explicit_CN.png")
+    plt.savefig("Figures/spatial_convergence_explicit_CN.png")
     plt.close()
 
 
@@ -114,7 +114,7 @@ def time_convergence():
     plt.legend()
     plt.grid(True, which="both", linestyle="--", alpha=0.6)
     plt.tight_layout()
-    plt.savefig("tests/time_convergence_explicit_CN.png")
+    plt.savefig("Figures/time_convergence_explicit_CN.png")
     plt.close()
 
 
@@ -158,7 +158,7 @@ def time_convergence_rannacher():
     plt.grid(True, which="both", linestyle="--", alpha=0.6)
 
     plt.tight_layout()
-    plt.savefig("tests/time_convergence_rannacher.png")
+    plt.savefig("Figures/time_convergence_rannacher.png")
     plt.close()
 
 
