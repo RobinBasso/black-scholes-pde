@@ -23,8 +23,6 @@ The numerical solutions are validated against the analytical Black–Scholes for
 
 ## Key Results
 
-## Key Results
-
 - Second-order spatial convergence verified for both schemes
 - Explicit scheme instability clearly demonstrated under CFL violation
 - Time convergence limited by payoff non-smoothness
