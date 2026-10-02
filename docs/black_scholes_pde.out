@@ -1,0 +1,38 @@
+\BOOKMARK [1][-]{section.1}{Notation and Conventions}{}% 1
+\BOOKMARK [1][-]{section.2}{The Black\205Scholes PDE}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Model and Equation}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Terminal Condition}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{Boundary Conditions}{section.2}% 5
+\BOOKMARK [1][-]{section.3}{Analytical Solution \(utils.py\)}{}% 6
+\BOOKMARK [2][-]{subsection.3.1}{Black\205Scholes Closed-Form Formula}{section.3}% 7
+\BOOKMARK [1][-]{section.4}{Spatial Discretisation}{}% 8
+\BOOKMARK [2][-]{subsection.4.1}{Grid Construction}{section.4}% 9
+\BOOKMARK [2][-]{subsection.4.2}{Finite Difference Operators}{section.4}% 10
+\BOOKMARK [2][-]{subsection.4.3}{Substitution into the PDE}{section.4}% 11
+\BOOKMARK [1][-]{section.5}{Explicit Finite Difference Scheme \(solve\137explicit\)}{}% 12
+\BOOKMARK [2][-]{subsection.5.1}{Time Discretisation}{section.5}% 13
+\BOOKMARK [2][-]{subsection.5.2}{Coefficients}{section.5}% 14
+\BOOKMARK [2][-]{subsection.5.3}{Stability Analysis}{section.5}% 15
+\BOOKMARK [2][-]{subsection.5.4}{Truncation Error}{section.5}% 16
+\BOOKMARK [1][-]{section.6}{Crank\205Nicolson Scheme \(solve\137crank\137nicolson\)}{}% 17
+\BOOKMARK [2][-]{subsection.6.1}{Time Discretisation}{section.6}% 18
+\BOOKMARK [2][-]{subsection.6.2}{Coefficient Derivation}{section.6}% 19
+\BOOKMARK [2][-]{subsection.6.3}{Linear System}{section.6}% 20
+\BOOKMARK [2][-]{subsection.6.4}{Boundary Corrections}{section.6}% 21
+\BOOKMARK [2][-]{subsection.6.5}{Linear Solve}{section.6}% 22
+\BOOKMARK [2][-]{subsection.6.6}{Truncation Error and Stability}{section.6}% 23
+\BOOKMARK [1][-]{section.7}{Rannacher Smoothing \(solve\137rannacher\)}{}% 24
+\BOOKMARK [2][-]{subsection.7.1}{Motivation: Payoff Regularity}{section.7}% 25
+\BOOKMARK [2][-]{subsection.7.2}{The Rannacher Procedure}{section.7}% 26
+\BOOKMARK [2][-]{subsection.7.3}{Implicit Euler Coefficients}{section.7}% 27
+\BOOKMARK [2][-]{subsection.7.4}{Right-Hand Side During Implicit Euler Phase}{section.7}% 28
+\BOOKMARK [2][-]{subsection.7.5}{Truncation Error}{section.7}% 29
+\BOOKMARK [1][-]{section.8}{Convergence Analysis \(tests/convergence.py\)}{}% 30
+\BOOKMARK [2][-]{subsection.8.1}{Error Metric}{section.8}% 31
+\BOOKMARK [2][-]{subsection.8.2}{Spatial Convergence Study}{section.8}% 32
+\BOOKMARK [2][-]{subsection.8.3}{Time Convergence Study}{section.8}% 33
+\BOOKMARK [2][-]{subsection.8.4}{Time Convergence with Rannacher Smoothing}{section.8}% 34
+\BOOKMARK [1][-]{section.9}{End-to-End Computational Summary}{}% 35
+\BOOKMARK [1][-]{section.10}{Scheme Comparison}{}% 36
+\BOOKMARK [1][-]{section.11}{Module Architecture Summary}{}% 37
+\BOOKMARK [1][-]{section.12}{Limitations and Potential Extensions}{}% 38

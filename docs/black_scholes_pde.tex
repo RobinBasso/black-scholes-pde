@@ -1,0 +1,790 @@
+\documentclass[12pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{setspace}
+
+% --- Colors ---
+\definecolor{codeblue}{RGB}{0, 80, 160}
+\definecolor{codegray}{RGB}{245, 245, 245}
+\definecolor{commentgreen}{RGB}{0, 128, 0}
+\definecolor{keywordred}{RGB}{160, 0, 0}
+
+% --- Code style ---
+\lstdefinestyle{pythonstyle}{
+    backgroundcolor=\color{codegray},
+    commentstyle=\color{commentgreen}\itshape,
+    keywordstyle=\color{keywordred}\bfseries,
+    numberstyle=\tiny\color{gray},
+    stringstyle=\color{codeblue},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    captionpos=b,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    language=Python,
+    frame=single,
+    rulecolor=\color{gray!40},
+    xleftmargin=1em,
+    framexleftmargin=1em,
+}
+\lstset{style=pythonstyle}
+
+% --- Header / Footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headheight}{15pt}
+\rhead{Black--Scholes PDE Solver}
+\lhead{Mathematical Reference}
+\cfoot{\thepage}
+
+% --- Theorem environments ---
+\newtheorem{definition}{Definition}[section]
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{remark}{Remark}[section]
+\newtheorem{proposition}{Proposition}[section]
+
+% --- Title ---
+\title{
+    \vspace{-1cm}
+    \textbf{\Large Black--Scholes PDE Solver} \\[0.4em]
+    \large Mathematical Documentation \\[0.2em]
+    \normalsize A complete exposition of all numerical methods, discretisations,
+    stability analyses, and convergence results implemented in the codebase
+}
+\author{RobinBasso}
+\date{\today}
+
+% ============================================================
+\begin{document}
+% ============================================================
+
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+This document provides a rigorous mathematical account of every computation
+performed in the \texttt{black-scholes-pde} project. The codebase implements
+three finite difference schemes for the Black--Scholes partial differential
+equation (PDE): an explicit (forward Euler in time) scheme, a
+Crank--Nicolson scheme, and Crank--Nicolson with Rannacher smoothing. All
+methods are validated against the closed-form Black--Scholes formula and
+subjected to systematic spatial and temporal convergence studies. Every
+formula, coefficient, matrix, stability condition, and convergence result
+stated in this document corresponds directly to the source code in
+\texttt{src/solver.py}, \texttt{src/utils.py}, and \texttt{tests/convergence.py}.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Notation and Conventions}
+% ============================================================
+
+\begin{center}
+\begin{tabular}{cl}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} \\
+\midrule
+$S$ & Underlying asset price \\
+$t$ & Time (calendar time, $t \in [0, T]$) \\
+$\tau = T - t$ & Time to maturity (backward time) \\
+$V(S, t)$ & Option price as a function of $S$ and $t$ \\
+$K$ & Strike price (default: 100) \\
+$T$ & Maturity (default: 1.0 year) \\
+$r$ & Risk-free interest rate (default: 0.05) \\
+$\sigma$ & Volatility (default: 0.20) \\
+$S_{\max}$ & Truncation of the spatial domain (default: 200) \\
+$M$ & Number of spatial intervals ($M+1$ grid points) \\
+$N$ & Number of time steps \\
+$\Delta S = S_{\max}/M$ & Spatial step size \\
+$\Delta t = T/N$ & Time step size \\
+$S_i = i\,\Delta S$ & $i$-th spatial grid point, $i = 0, 1, \ldots, M$ \\
+$t^n = n\,\Delta t$ & $n$-th time level (forward), $n = 0, 1, \ldots, N$ \\
+$V_i^n$ & Numerical approximation to $V(S_i, t^n)$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent
+The code solves the PDE \textbf{backwards in time} from $t = T$ (terminal
+condition) to $t = 0$ (option price today), storing the solution on a grid
+\texttt{grid[i, j]} where the column index $j$ runs from $0$ (today) to
+$N$ (maturity). The analytical solution is stored at column $j = 0$ after
+backward stepping.
+
+% ============================================================
+\section{The Black--Scholes PDE}
+% ============================================================
+
+\subsection{Model and Equation}
+
+Under the Black--Scholes model, the no-arbitrage price $V(S, t)$ of a
+European option satisfies the PDE:
+\begin{equation}
+    \boxed{
+    \frac{\partial V}{\partial t}
+    + \frac{1}{2}\sigma^2 S^2 \frac{\partial^2 V}{\partial S^2}
+    + r S \frac{\partial V}{\partial S}
+    - r V = 0,
+    \qquad (S, t) \in (0, S_{\max}) \times [0, T).
+    }
+    \label{eq:bspde}
+\end{equation}
+The three terms beyond $\partial V/\partial t$ have clear financial
+interpretations:
+\begin{itemize}[noitemsep]
+    \item $\frac{1}{2}\sigma^2 S^2 \partial^2 V/\partial S^2$: convexity / gamma term (diffusion).
+    \item $r S\, \partial V/\partial S$: delta term (advection).
+    \item $-rV$: discounting (reaction / zeroth-order term).
+\end{itemize}
+
+\subsection{Terminal Condition}
+
+For a European call option with strike $K$:
+\begin{equation}
+    V(S, T) = \max(S - K,\; 0).
+    \label{eq:terminal}
+\end{equation}
+This is the \textbf{payoff function}. In the code it is initialised as:
+\begin{lstlisting}
+grid[:, -1] = np.maximum(S - K, 0)
+\end{lstlisting}
+where the last column (\texttt{j = N}) corresponds to $t = T$.
+
+\subsection{Boundary Conditions}
+\label{sec:bc}
+
+\paragraph{Lower boundary ($S = 0$).}
+When the asset price is zero, it stays zero under the geometric Brownian
+motion model, so the call option is worthless:
+\begin{equation}
+    V(0, t) = 0 \qquad \forall\, t \in [0, T].
+    \label{eq:bc_lower}
+\end{equation}
+
+\paragraph{Upper boundary ($S = S_{\max}$).}
+For large $S$, the probability of the option expiring out-of-the-money
+approaches zero and the option behaves like a forward contract. The standard
+approximation is:
+\begin{equation}
+    V(S_{\max}, t) \approx S_{\max} - K e^{-r(T - t)}.
+    \label{eq:bc_upper}
+\end{equation}
+In the code, this is precomputed over all time levels:
+\begin{lstlisting}
+time = np.linspace(0, T, N + 1)
+grid[-1, :] = S_max - K * np.exp(-r * (T - time))
+\end{lstlisting}
+
+% ============================================================
+\section{Analytical Solution (\texttt{utils.py})}
+% ============================================================
+
+\subsection{Black--Scholes Closed-Form Formula}
+
+The exact price of a European call under the Black--Scholes model is:
+\begin{equation}
+    \boxed{V(S, t) = S\,\Phi(d_1) - K e^{-r(T-t)}\,\Phi(d_2)}
+    \label{eq:bs_formula}
+\end{equation}
+where $\Phi$ is the standard normal CDF and:
+\begin{align}
+    d_1 &= \frac{\ln(S/K) + (r + \tfrac{1}{2}\sigma^2)(T-t)}{\sigma\sqrt{T-t}},
+    \label{eq:d1} \\
+    d_2 &= d_1 - \sigma\sqrt{T-t}.
+    \label{eq:d2}
+\end{align}
+The implementation in \texttt{black\_scholes\_call} evaluates this at $t = 0$
+(i.e., $T - t = T$), masking out $S = 0$ to avoid $\ln(0)$:
+\begin{lstlisting}
+mask   = S > 0
+d1     = (np.log(S_pos / K) + (r + 0.5*sigma**2)*T) / (sigma*np.sqrt(T))
+d2     = d1 - sigma * np.sqrt(T)
+price[mask] = S_pos * norm.cdf(d1) - K * np.exp(-r*T) * norm.cdf(d2)
+\end{lstlisting}
+This serves as the \textbf{ground truth} for all error computations in the
+project.
+
+% ============================================================
+\section{Spatial Discretisation}
+% ============================================================
+
+\subsection{Grid Construction}
+
+The spatial domain $[0, S_{\max}]$ is divided into $M$ equal intervals:
+\[
+    S_i = i\,\Delta S, \quad \Delta S = \frac{S_{\max}}{M}, \quad i = 0, 1, \ldots, M.
+\]
+The grid has $M + 1$ points total. Interior points are $i = 1, \ldots, M-1$;
+boundary points are $i = 0$ and $i = M$.
+
+\subsection{Finite Difference Operators}
+
+The spatial derivatives in equation~\eqref{eq:bspde} are approximated by
+\textbf{second-order central differences}:
+\begin{align}
+    \frac{\partial V}{\partial S}\bigg|_{S=S_i}
+    &\approx \frac{V_{i+1} - V_{i-1}}{2\,\Delta S},
+    \label{eq:fd_first} \\
+    \frac{\partial^2 V}{\partial S^2}\bigg|_{S=S_i}
+    &\approx \frac{V_{i+1} - 2V_i + V_{i-1}}{\Delta S^2}.
+    \label{eq:fd_second}
+\end{align}
+Both are $O(\Delta S^2)$ accurate, which underpins the second-order spatial
+convergence observed in all three schemes.
+
+\subsection{Substitution into the PDE}
+
+Substituting~\eqref{eq:fd_first}--\eqref{eq:fd_second} into~\eqref{eq:bspde},
+noting that $S_i = i\,\Delta S$ so $S_i/\Delta S = i$, and using
+$S_i^2/\Delta S^2 = i^2$, yields:
+\begin{equation}
+    \frac{\partial V_i}{\partial t}
+    + \frac{\sigma^2 i^2}{2}\bigl(V_{i+1} - 2V_i + V_{i-1}\bigr)
+    + \frac{r i}{2}\bigl(V_{i+1} - V_{i-1}\bigr)
+    - r V_i = 0.
+    \label{eq:semidiscrete}
+\end{equation}
+This is a \emph{semi-discrete} system (continuous in time, discrete in space),
+from which the fully discrete schemes are derived by approximating
+$\partial V_i/\partial t$.
+
+% ============================================================
+\section{Explicit Finite Difference Scheme (\texttt{solve\_explicit})}
+% ============================================================
+
+\subsection{Time Discretisation}
+
+The time derivative is approximated by a \textbf{forward (explicit) Euler}
+step — but since we march \emph{backwards} from $t = T$ to $t = 0$, the
+update reads:
+\[
+    \frac{\partial V_i}{\partial t} \approx \frac{V_i^{n+1} - V_i^n}{\Delta t}
+    \quad \Longrightarrow \quad
+    V_i^n = V_i^{n+1} + \Delta t \left[\text{spatial terms at } n+1\right].
+\]
+Substituting into~\eqref{eq:semidiscrete} and rearranging:
+
+\begin{equation}
+    \boxed{V_i^n = a_i\,V_{i-1}^{n+1} + b_i\,V_i^{n+1} + c_i\,V_{i+1}^{n+1}}
+    \label{eq:explicit_update}
+\end{equation}
+
+\subsection{Coefficients}
+
+\begin{align}
+    a_i &= \frac{1}{2}\,\Delta t\!\left(\sigma^2 i^2 - r i\right),
+    \label{eq:ai} \\
+    b_i &= 1 - \Delta t\!\left(\sigma^2 i^2 + r\right),
+    \label{eq:bi} \\
+    c_i &= \frac{1}{2}\,\Delta t\!\left(\sigma^2 i^2 + r i\right).
+    \label{eq:ci}
+\end{align}
+
+These match exactly the code:
+\begin{lstlisting}
+a = 0.5 * dt * (sigma**2 * i**2 - r * i)
+b = 1 - dt * (sigma**2 * i**2 + r)
+c = 0.5 * dt * (sigma**2 * i**2 + r * i)
+grid[i, j] = a * grid[i-1, j+1] + b * grid[i, j+1] + c * grid[i+1, j+1]
+\end{lstlisting}
+
+Note that $a_i + b_i + c_i = 1 - \Delta t\cdot r$, which is less than 1 for
+$r > 0$, consistent with discounting.
+
+\subsection{Stability Analysis}
+\label{sec:explicit_stability}
+
+The explicit scheme is \textbf{conditionally stable}. The stability condition
+requires that all coefficients $a_i$, $b_i$, $c_i$ be non-negative (a
+sufficient condition for monotonicity / maximum principle):
+\[
+    b_i \geq 0 \quad \Longleftrightarrow \quad
+    \Delta t \leq \frac{1}{\sigma^2 i^2 + r}.
+\]
+The most restrictive constraint is at $i = M$ (largest $S$):
+\begin{equation}
+    \boxed{\Delta t \lesssim \frac{1}{\sigma^2 M^2}}
+    \label{eq:cfl}
+\end{equation}
+This is a \textbf{CFL-type condition}. In the convergence study, the explicit
+scheme is given $N = 2M^2$ time steps to ensure stability:
+\begin{lstlisting}
+N_explicit = M * M * 2   # ensures dt << 1 / (sigma^2 * M^2)
+\end{lstlisting}
+Violation of~\eqref{eq:cfl} causes the scheme to diverge, as demonstrated in
+the time convergence tests.
+
+\subsection{Truncation Error}
+
+The local truncation error (LTE) of the explicit scheme is:
+\[
+    \tau = O(\Delta t) + O(\Delta S^2).
+\]
+Hence the scheme is \textbf{first-order in time} and \textbf{second-order in
+space}. When the CFL condition is tight ($\Delta t \sim 1/(\sigma^2 M^2) \sim
+\Delta S^2$), both errors are of comparable magnitude.
+
+% ============================================================
+\section{Crank--Nicolson Scheme (\texttt{solve\_crank\_nicolson})}
+% ============================================================
+
+\subsection{Time Discretisation}
+
+The Crank--Nicolson method averages the spatial operator at time levels
+$n$ and $n+1$:
+\begin{equation}
+    \frac{V_i^n - V_i^{n+1}}{\Delta t}
+    = \frac{1}{2}\mathcal{L}_i[V^n]
+    + \frac{1}{2}\mathcal{L}_i[V^{n+1}],
+    \label{eq:cn_abstract}
+\end{equation}
+where the spatial operator (from equation~\eqref{eq:semidiscrete}) is:
+\[
+    \mathcal{L}_i[V]
+    = \frac{\sigma^2 i^2}{2}(V_{i+1} - 2V_i + V_{i-1})
+    + \frac{ri}{2}(V_{i+1} - V_{i-1}) - rV_i.
+\]
+
+\subsection{Coefficient Derivation}
+
+Define half-step coefficients:
+\begin{align}
+    \alpha_i &= \frac{1}{4}\,\Delta t\!\left(\sigma^2 i^2 - ri\right),
+    \label{eq:alpha} \\
+    \beta_i  &= -\frac{1}{2}\,\Delta t\!\left(\sigma^2 i^2 + r\right),
+    \label{eq:beta} \\
+    \gamma_i &= \frac{1}{4}\,\Delta t\!\left(\sigma^2 i^2 + ri\right).
+    \label{eq:gamma}
+\end{align}
+Note that $\alpha_i = a_i/2$ and $\gamma_i = c_i/2$ compared to the explicit
+coefficients, and $\beta_i = (b_i - 1)/2$. These match the code:
+\begin{lstlisting}
+alpha = 0.25 * dt * (sigma**2 * i**2 - r * i)
+beta  = -0.5 * dt * (sigma**2 * i**2 + r)
+gamma = 0.25 * dt * (sigma**2 * i**2 + r * i)
+\end{lstlisting}
+
+\subsection{Linear System}
+
+Rearranging~\eqref{eq:cn_abstract} moves the unknowns ($V^n$) to the left and
+the knowns ($V^{n+1}$) to the right, giving a tridiagonal linear system for
+the interior points $i = 1, \ldots, M-1$:
+\begin{equation}
+    \mathbf{A}\,\bm{V}^n = \mathbf{B}\,\bm{V}^{n+1} + \bm{b}_{\text{bc}},
+    \label{eq:linsys}
+\end{equation}
+where $\bm{V}^n = (V_1^n, V_2^n, \ldots, V_{M-1}^n)^\top$ and the
+$(M-1)\times(M-1)$ tridiagonal matrices are:
+
+\paragraph{Matrix $\mathbf{A}$ (implicit side):}
+\begin{equation}
+    \mathbf{A} =
+    \begin{pmatrix}
+    1-\beta_1   & -\gamma_1  & 0          & \cdots & 0 \\
+    -\alpha_2   & 1-\beta_2  & -\gamma_2  & \cdots & 0 \\
+    0           & -\alpha_3  & 1-\beta_3  & \cdots & 0 \\
+    \vdots      & \ddots     & \ddots     & \ddots & \vdots \\
+    0           & \cdots     & 0          & -\alpha_{M-1} & 1-\beta_{M-1}
+    \end{pmatrix}
+    \label{eq:A_matrix}
+\end{equation}
+
+\paragraph{Matrix $\mathbf{B}$ (explicit side):}
+\begin{equation}
+    \mathbf{B} =
+    \begin{pmatrix}
+    1+\beta_1   & \gamma_1   & 0          & \cdots & 0 \\
+    \alpha_2    & 1+\beta_2  & \gamma_2   & \cdots & 0 \\
+    0           & \alpha_3   & 1+\beta_3  & \cdots & 0 \\
+    \vdots      & \ddots     & \ddots     & \ddots & \vdots \\
+    0           & \cdots     & 0          & \alpha_{M-1} & 1+\beta_{M-1}
+    \end{pmatrix}
+    \label{eq:B_matrix}
+\end{equation}
+
+Note that $\mathbf{A}$ and $\mathbf{B}$ satisfy $\mathbf{A} + \mathbf{B} =
+2\mathbf{I}$, up to boundary corrections. In the code:
+\begin{lstlisting}
+A[row, row]   = 1 - beta;  B[row, row]   = 1 + beta
+A[row, row-1] = -alpha;    B[row, row-1] = alpha
+A[row, row+1] = -gamma;    B[row, row+1] = gamma
+\end{lstlisting}
+
+\subsection{Boundary Corrections}
+
+The right-hand side vector $\bm{b}_{\text{bc}}$ accounts for the
+boundary values at $i = 0$ and $i = M$ which appear in the stencil for
+the first and last interior rows. For row $i = 1$ (lower boundary):
+\[
+    [\bm{b}_{\text{bc}}]_1
+    = \alpha_1 \bigl(V_0^n + V_0^{n+1}\bigr)
+    = \alpha_1 \cdot 0 = 0,
+\]
+but since $V_0^n = 0$ always, the correction is zero for the lower boundary.
+For row $i = M-1$ (upper boundary):
+\[
+    [\bm{b}_{\text{bc}}]_{M-1}
+    = \gamma_{M-1}\bigl(V_M^n + V_M^{n+1}\bigr).
+\]
+This is added in the time loop:
+\begin{lstlisting}
+# Lower boundary (i=1): V_0 = 0, so correction is zero
+alpha_1 = 0.25 * dt * (sigma**2 * 1**2 - r * 1)
+rhs[0] += alpha_1 * (grid[0, j] + grid[0, j+1])
+
+# Upper boundary (i=M-1)
+gamma_Mm1 = 0.25 * dt * (sigma**2 * (M-1)**2 + r * (M-1))
+rhs[-1]  += gamma_Mm1 * (grid[M, j] + grid[M, j+1])
+\end{lstlisting}
+
+\subsection{Linear Solve}
+
+At each time step, the system $\mathbf{A}\bm{x} = \text{rhs}$ is solved using
+\texttt{numpy.linalg.solve}, which applies LU decomposition. Since $\mathbf{A}$
+is a fixed tridiagonal matrix (time-independent coefficients), it could be
+pre-factorised for efficiency; the current code recomputes the solve at each
+step.
+
+\subsection{Truncation Error and Stability}
+
+The Crank--Nicolson scheme has:
+\begin{itemize}[noitemsep]
+    \item \textbf{Truncation error}: $O(\Delta t^2) + O(\Delta S^2)$ — second-order in both.
+    \item \textbf{Stability}: \textbf{unconditionally stable} (for the diffusion-dominated case), because $\mathbf{A}$ is strictly diagonally dominant for $\beta_i < 0$, which holds whenever $r > 0$.
+\end{itemize}
+
+The unconditional stability means $N$ can be set equal to $M$ (rather than
+$M^2$) in the convergence study:
+\begin{lstlisting}
+N_cn = M   # No CFL constraint
+\end{lstlisting}
+
+% ============================================================
+\section{Rannacher Smoothing (\texttt{solve\_rannacher})}
+% ============================================================
+
+\subsection{Motivation: Payoff Regularity}
+
+The call payoff $\max(S - K, 0)$ is \textbf{continuous but not differentiable}
+at $S = K$:
+\[
+    \frac{\partial V}{\partial S}\bigg|_{S=K^+} = 1,
+    \qquad
+    \frac{\partial V}{\partial S}\bigg|_{S=K^-} = 0.
+\]
+This kink in the initial condition degrades the temporal convergence of
+Crank--Nicolson from theoretical $O(\Delta t^2)$ to approximately $O(\Delta t)$
+in practice, because the averaging of the operator at two time levels amplifies
+the discontinuity in the derivative.
+
+\subsection{The Rannacher Procedure}
+
+The Rannacher method (1984) applies \textbf{fully implicit (backward) Euler}
+for the first $n_{\text{smooth}}$ time steps (default: 4) immediately after
+the terminal condition, before switching to Crank--Nicolson:
+\begin{equation}
+    \text{Method at step } j =
+    \begin{cases}
+        \text{Implicit Euler} & \text{if } j \geq N - n_{\text{smooth}} \\
+        \text{Crank--Nicolson} & \text{otherwise}
+    \end{cases}
+\end{equation}
+The implicit Euler steps damp the oscillations caused by the non-smooth
+payoff; subsequent Crank--Nicolson steps then inherit a smooth solution.
+
+\subsection{Implicit Euler Coefficients}
+
+The implicit Euler discretisation is:
+\[
+    \frac{V_i^n - V_i^{n+1}}{\Delta t} = \mathcal{L}_i[V^n],
+\]
+which gives the linear system $\mathbf{A}_{\text{imp}}\,\bm{V}^n =
+\bm{V}^{n+1}$ with tridiagonal matrix coefficients:
+\begin{align}
+    \alpha_i^{\text{(IE)}} &= \frac{1}{2}\,\Delta t(\sigma^2 i^2 - ri),
+    \label{eq:alpha_imp} \\
+    \beta_i^{\text{(IE)}}  &= -\Delta t(\sigma^2 i^2 + r),
+    \label{eq:beta_imp} \\
+    \gamma_i^{\text{(IE)}} &= \frac{1}{2}\,\Delta t(\sigma^2 i^2 + ri).
+    \label{eq:gamma_imp}
+\end{align}
+Note that $\alpha_i^{\text{(IE)}} = 2\alpha_i$ and $\gamma_i^{\text{(IE)}} =
+2\gamma_i$ — exactly twice the Crank--Nicolson half-coefficients. This matches
+the code:
+\begin{lstlisting}
+alpha_e = 0.5 * dt * (sigma**2 * i**2 - r * i)   # = 2 * alpha_CN
+beta_e  = -dt  * (sigma**2 * i**2 + r)             # = 2 * beta_CN
+gamma_e = 0.5 * dt * (sigma**2 * i**2 + r * i)    # = 2 * gamma_CN
+
+A_imp[row, row-1] = -alpha_e
+A_imp[row, row]   = 1 - beta_e
+A_imp[row, row+1] = -gamma_e
+\end{lstlisting}
+
+\subsection{Right-Hand Side During Implicit Euler Phase}
+
+During the Rannacher smoothing phase ($j \geq N - n_{\text{smooth}}$), the
+RHS for the implicit Euler step is simply $\bm{V}^{n+1}$ with boundary
+corrections from both boundaries:
+\begin{lstlisting}
+rhs = grid[1:M, j+1].copy()
+rhs[0]  += 0.5*dt*(sigma**2*1**2 - r*1)    * (grid[0, j] + grid[0, j+1])
+rhs[-1] += 0.5*dt*(sigma**2*(M-1)**2 + r*(M-1)) * (grid[M, j] + grid[M, j+1])
+\end{lstlisting}
+
+\subsection{Truncation Error}
+
+\begin{itemize}[noitemsep]
+    \item Implicit Euler: $O(\Delta t) + O(\Delta S^2)$ — first-order in time.
+    \item Crank--Nicolson: $O(\Delta t^2) + O(\Delta S^2)$ — second-order in time (theoretical).
+\end{itemize}
+With the Rannacher procedure, the observed convergence is
+\textbf{approximately first-order in time} rather than second-order, because
+the $O(\Delta t)$ error from the initial smoothing steps dominates. However,
+the smoothing eliminates the spurious oscillations that would otherwise
+completely destroy the convergence rate of plain Crank--Nicolson on
+non-smooth payoffs.
+
+% ============================================================
+\section{Convergence Analysis (\texttt{tests/convergence.py})}
+% ============================================================
+
+\subsection{Error Metric}
+
+All convergence studies use the \textbf{maximum absolute error} (sup-norm)
+over the spatial grid at $t = 0$:
+\begin{equation}
+    \mathcal{E} = \max_{i=0,\ldots,M} \left|V_i^{\text{num}} - V^{\text{exact}}(S_i)\right|,
+    \label{eq:error}
+\end{equation}
+implemented as:
+\begin{lstlisting}
+error = np.max(np.abs(price_numerical - price_exact))
+\end{lstlisting}
+
+\subsection{Spatial Convergence Study}
+
+\paragraph{Setup.} Spatial resolution is varied: $M \in \{25, 50, 100, 200\}$.
+For each $M$:
+\begin{itemize}[noitemsep]
+    \item Crank--Nicolson: $N = M$ (time error negligible, dominated by space).
+    \item Explicit: $N = 2M^2$ (ensures CFL stability without time error dominating).
+\end{itemize}
+
+\paragraph{Expected result.} Both schemes use second-order central differences
+in space, giving:
+\[
+    \mathcal{E} = O(\Delta S^2) = O(M^{-2}).
+\]
+
+\paragraph{Observed result.} Both schemes track the $O(M^{-2})$ reference
+slope on a log-log plot. However, neither exactly achieves the theoretical
+rate: the kink in the payoff at $S = K$ locally reduces the spatial regularity
+and slightly degrades the observed order.
+
+\subsection{Time Convergence Study}
+
+\paragraph{Setup.} Fixed $M = 50$ (spatial error fixed). The stability limit
+is:
+\[
+    \Delta t_{\text{stab}} = \frac{1}{\sigma^2 M^2} = \frac{1}{0.04 \times 2500}
+    = \frac{1}{100} = 0.01,
+    \qquad
+    N_{\min} = \left\lfloor\frac{T}{\Delta t_{\text{stab}}}\right\rfloor = 100.
+\]
+Both schemes are run at $N \in \{N_{\min}, 2N_{\min}, 4N_{\min}, 8N_{\min},
+16N_{\min}\}$.
+
+\paragraph{Explicit scheme instability.} When $N < N_{\min}$, the explicit
+scheme violates the CFL condition~\eqref{eq:cfl} and diverges. The convergence
+study shows this by using $N$ values just above the stability boundary.
+
+\paragraph{Saturation phenomenon.} Once the explicit scheme is stabilised,
+increasing $N$ barely reduces the error, because the dominant error is now
+\emph{spatial} (fixed $M$). The time error $O(\Delta t) = O(1/N)$ quickly
+becomes negligible compared to $O(\Delta S^2) = O(M^{-2})$.
+
+\paragraph{Crank--Nicolson.} Similar saturation occurs: the scheme is already
+accurate enough in time for reasonable $N$, and the spatial error floor is
+reached quickly.
+
+\subsection{Time Convergence with Rannacher Smoothing}
+
+\paragraph{Setup.} Fixed $M = 200$ (fine spatial grid to suppress spatial
+error). Time steps $N \in \{100, 200, 400, 800, 1600\}$.
+
+\paragraph{Observed convergence.} The Rannacher scheme achieves approximately
+$O(\Delta t) = O(N^{-1})$ in time, matching the $O(dt)$ reference slope on the
+log-log plot. This is \textbf{better} than plain Crank--Nicolson on the same
+non-smooth payoff (which stagnates or oscillates), but \textbf{worse} than
+theoretical second-order because the implicit Euler smoothing steps introduce
+$O(\Delta t)$ error.
+
+\begin{remark}
+    The $O(\Delta t)$ convergence of Rannacher is not a failure of the method.
+    It is the \emph{correct} asymptotic rate given the payoff regularity: the
+    gain over plain Crank--Nicolson lies in the \emph{constant} being much
+    smaller and in the elimination of oscillatory artefacts.
+\end{remark}
+
+% ============================================================
+\section{End-to-End Computational Summary}
+% ============================================================
+
+The full computation for a single numerical solution can be written as:
+
+\bigskip
+\noindent\textbf{Step 1 — Grid initialisation.}
+\[
+    S_i = i\,\frac{S_{\max}}{M}, \quad i = 0,\ldots,M; \qquad
+    t^n = n\,\frac{T}{N}, \quad n = 0,\ldots,N.
+\]
+
+\noindent\textbf{Step 2 — Terminal condition.}
+\[
+    V_i^N = \max(S_i - K,\; 0), \quad i = 0,\ldots,M.
+\]
+
+\noindent\textbf{Step 3 — Boundary conditions (all $n$).}
+\[
+    V_0^n = 0, \qquad V_M^n = S_{\max} - K e^{-r(T - t^n)}.
+\]
+
+\noindent\textbf{Step 4 — Backward time stepping} (for $j = N-1, N-2, \ldots, 0$):
+\begin{itemize}[noitemsep]
+    \item \textbf{Explicit}: $V_i^j = a_i V_{i-1}^{j+1} + b_i V_i^{j+1} + c_i V_{i+1}^{j+1}$, $i = 1,\ldots,M-1$.
+    \item \textbf{Crank--Nicolson}: solve $\mathbf{A}\bm{V}^j = \mathbf{B}\bm{V}^{j+1} + \bm{b}_{\text{bc}}$.
+    \item \textbf{Rannacher}: use implicit Euler for $j \geq N - n_{\text{smooth}}$, then Crank--Nicolson.
+\end{itemize}
+
+\noindent\textbf{Step 5 — Output.}
+\[
+    \text{Return } (S_0, S_1, \ldots, S_M) \text{ and } (V_0^0, V_1^0, \ldots, V_M^0).
+\]
+
+% ============================================================
+\section{Scheme Comparison}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\caption{Summary comparison of the three implemented schemes}
+\begin{tabular}{llllll}
+\toprule
+\textbf{Scheme} & \textbf{Time order} & \textbf{Space order} & \textbf{Stability} & \textbf{System} & \textbf{$N$ needed} \\
+\midrule
+Explicit        & $O(\Delta t)$       & $O(\Delta S^2)$      & Conditional (CFL)  & Explicit        & $O(M^2)$ \\
+Crank--Nicolson & $O(\Delta t^2)$     & $O(\Delta S^2)$      & Unconditional      & Tridiagonal     & $O(M)$ \\
+Rannacher       & $O(\Delta t)$*      & $O(\Delta S^2)$      & Unconditional      & Tridiagonal     & $O(M)$ \\
+\bottomrule
+\end{tabular}
+\caption*{*Practical rate on non-smooth payoff; theoretical CN rate is $O(\Delta t^2)$.}
+\end{table}
+
+% ============================================================
+\section{Module Architecture Summary}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\caption{Modules and their mathematical roles}
+\begin{tabular}{llp{8.5cm}}
+\toprule
+\textbf{File} & \textbf{Function} & \textbf{Mathematical Content} \\
+\midrule
+\texttt{utils.py} & \texttt{black\_scholes\_call} & Closed-form formula (equations~\ref{eq:bs_formula}--\ref{eq:d2}) \\
+\texttt{solver.py} & \texttt{solve\_explicit} & Explicit update (equation~\ref{eq:explicit_update}), coefficients~\eqref{eq:ai}--\eqref{eq:ci} \\
+& \texttt{solve\_crank\_nicolson} & Tridiagonal system~\eqref{eq:linsys}, matrices~\eqref{eq:A_matrix}--\eqref{eq:B_matrix} \\
+& \texttt{solve\_rannacher} & Hybrid IE + CN, coefficients~\eqref{eq:alpha_imp}--\eqref{eq:gamma_imp} \\
+\texttt{convergence.py} & \texttt{convergence\_study} & Spatial $\mathcal{E}$ vs.\ $M$ (equation~\ref{eq:error}) \\
+& \texttt{time\_convergence} & Temporal $\mathcal{E}$ vs.\ $N$, CFL illustration \\
+& \texttt{time\_convergence\_rannacher} & Rannacher $\mathcal{E}$ vs.\ $N$, $O(\Delta t)$ rate \\
+\texttt{test\_solver.py} & \texttt{run\_test} & Point-wise comparison of all three methods against analytical \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{Limitations and Potential Extensions}
+% ============================================================
+
+The current implementation is a clean, instructive codebase with a few
+practical limitations worth noting for production use:
+
+\begin{enumerate}
+    \item \textbf{European call only.} The terminal condition and upper
+          boundary are hardcoded for a vanilla call. American options require
+          a free-boundary (complementarity) formulation; exotic payoffs require
+          modified terminal conditions.
+
+    \item \textbf{Non-uniform grids.} The uniform $\Delta S$ grid concentrates
+          grid points uniformly across $[0, S_{\max}]$. A sinh-stretching or
+          log-transform grid would place more points near $S = K$, improving
+          accuracy at the kink and potentially restoring second-order spatial
+          convergence in the convergence constant.
+
+    \item \textbf{Direct linear solver.} \texttt{np.linalg.solve} uses
+          full LU decomposition, $O(M^3)$ per time step. For tridiagonal
+          systems, the Thomas algorithm is $O(M)$; using
+          \texttt{scipy.linalg.solve\_banded} or \texttt{scipy.sparse} would
+          give a significant speedup for large $M$.
+
+    \item \textbf{Constant $\mathbf{A}$.} The matrix $\mathbf{A}$ is
+          time-independent (coefficients do not depend on $t^n$). It is
+          rebuilt and refactorised at each time step in the current code; a
+          single pre-factorisation would reduce computational cost.
+
+    \item \textbf{Single asset, single factor.} The code solves a
+          one-dimensional PDE. Multi-asset options (basket, spread) require
+          higher-dimensional PDE solvers (ADI methods, Monte Carlo).
+
+    \item \textbf{Fixed parameters.} $\sigma$ and $r$ are constant. Local
+          volatility models (Dupire) or stochastic volatility models (Heston)
+          introduce $\sigma = \sigma(S, t)$ or additional state variables.
+\end{enumerate}
+
+Natural extensions include: Richardson extrapolation for higher-order time
+accuracy without Rannacher, PSOR (projected SOR) for American options, and
+a log-space transformation $x = \ln(S/K)$ which converts the PDE to
+constant-coefficient form and simplifies grid design.
+
+% ============================================================
+\section*{References}
+% ============================================================
+
+\begin{itemize}[noitemsep]
+    \item Black, F. \& Scholes, M. (1973). The pricing of options and
+          corporate liabilities. \textit{Journal of Political Economy}, 81(3),
+          637--654.
+    \item Rannacher, R. (1984). Finite element solution of diffusion problems
+          with irregular data. \textit{Numerische Mathematik}, 43(2), 309--327.
+    \item Wilmott, P., Dewynne, J. \& Howison, S. (1993). \textit{Option
+          Pricing: Mathematical Models and Computation}. Oxford Financial
+          Press.
+    \item Strikwerda, J. C. (2004). \textit{Finite Difference Schemes and
+          Partial Differential Equations} (2nd ed.). SIAM.
+    \item Seydel, R. U. (2009). \textit{Tools for Computational Finance}
+          (4th ed.). Springer.
+\end{itemize}
+
+\end{document}
